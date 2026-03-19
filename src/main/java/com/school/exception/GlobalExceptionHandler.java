@@ -4,6 +4,10 @@ import com.school.dto.response.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
@@ -57,6 +61,39 @@ public class GlobalExceptionHandler {
             errors.put(fieldName, errorMessage);
         });
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error("Validation failed", errors));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+        String supported = ex.getSupportedHttpMethods() != null
+                ? ex.getSupportedHttpMethods().toString()
+                : "unknown";
+        String message = String.format(
+                "Method '%s' is not allowed for this endpoint. Supported: %s",
+                ex.getMethod(), supported);
+        log.warn("Method not supported: {}", message);
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(ApiResponse.error(message));
+    }
+
+    @ExceptionHandler(NoHandlerFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoHandlerFound(NoHandlerFoundException ex) {
+        String message = String.format("Endpoint '%s %s' not found", ex.getHttpMethod(), ex.getRequestURL());
+        log.warn("No handler found: {}", message);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(message));
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingParam(MissingServletRequestParameterException ex) {
+        String message = String.format("Required parameter '%s' of type '%s' is missing",
+                ex.getParameterName(), ex.getParameterType());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(message));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        String message = String.format("Parameter '%s' has invalid value '%s'",
+                ex.getName(), ex.getValue());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(message));
     }
 
     @ExceptionHandler(Exception.class)
