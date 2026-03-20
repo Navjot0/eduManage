@@ -38,7 +38,7 @@ public class ClassService {
     @Transactional
     public ClassResponse createClass(CreateClassRequest request) {
         classRepository.findByClassNameAndSectionAndAcademicYear(
-                request.getClassName(), request.getSection(), request.getAcademicYear())
+                        request.getClassName(), request.getSection(), request.getAcademicYear())
                 .ifPresent(c -> { throw new ConflictException("Class already exists for this academic year"); });
 
         Teacher teacher = null;
@@ -70,6 +70,14 @@ public class ClassService {
     public void deleteClass(UUID id) {
         if (!classRepository.existsById(id)) throw new ResourceNotFoundException("Class", "id", id);
         classRepository.deleteById(id);
+    }
+
+    @Transactional
+    public ClassResponse syncStudentCount(UUID classId) {
+        Class cls = findById(classId);
+        classRepository.syncStudentCount(cls.getClassName(), cls.getSection());
+        // Re-fetch after update
+        return mapToResponse(findById(classId));
     }
 
     private Class findById(UUID id) {

@@ -9,6 +9,8 @@ import com.school.enums.StatusActive;
 import com.school.enums.UserRole;
 import com.school.exception.ConflictException;
 import com.school.exception.ResourceNotFoundException;
+import com.school.entity.Class;
+import com.school.repository.ClassRepository;
 import com.school.repository.StudentRepository;
 import com.school.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +28,7 @@ public class StudentService {
 
     private final StudentRepository studentRepository;
     private final UserRepository userRepository;
+    private final ClassRepository classRepository;
     private final PasswordEncoder passwordEncoder;
 
     public List<StudentResponse> getAllStudents() {
@@ -35,6 +38,11 @@ public class StudentService {
     public List<StudentResponse> getStudentsByClass(String className, String section) {
         return studentRepository.findByClassNameAndSection(className, section)
                 .stream().map(this::mapToResponse).collect(Collectors.toList());
+    }
+
+    public StudentResponse getStudentByUserId(UUID userId) {
+        return mapToResponse(studentRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Student", "userId", userId)));
     }
 
     public StudentResponse getStudentById(UUID id) {
@@ -76,26 +84,71 @@ public class StudentService {
                 .admissionDate(request.getAdmissionDate())
                 .status(StatusActive.active)
                 .build();
-        return mapToResponse(studentRepository.save(student));
+        StudentResponse response = mapToResponse(studentRepository.save(student));
+
+        // Increment student_count in the matching class row
+        int updated = classRepository.incrementStudentCount(request.getClassName(), request.getSection());
+        if (updated == 0) {
+            // Class row doesn't exist yet — that's OK, count stays at default
+            // Admins should create the class first via POST /classes
+        }
+
+        return response;
     }
 
     @Transactional
     public StudentResponse updateStudent(UUID id, UpdateStudentRequest request) {
         Student student = findById(id);
+
+        // Detect class/section change to update counts
+        String oldClass   = student.getClassName();
+        String oldSection = student.getSection();
+        boolean classChanged = (request.getClassName() != null && !request.getClassName().equals(oldClass))
+                || (request.getSection()   != null && !request.getSection().equals(oldSection));
+
         if (request.getClassName() != null) student.setClassName(request.getClassName());
-        if (request.getSection() != null) student.setSection(request.getSection());
-        if (request.getParentName() != null) student.setParentName(request.getParentName());
+        if (request.getSection()   != null) student.setSection(request.getSection());
+        if (request.getParentName()  != null) student.setParentName(request.getParentName());
         if (request.getParentPhone() != null) student.setParentPhone(request.getParentPhone());
-        if (request.getAddress() != null) student.setAddress(request.getAddress());
+        if (request.getAddress()     != null) student.setAddress(request.getAddress());
         if (request.getDateOfBirth() != null) student.setDateOfBirth(request.getDateOfBirth());
-        if (request.getStatus() != null) student.setStatus(request.getStatus());
-        return mapToResponse(studentRepository.save(student));
+
+        // Handle activation / deactivation affecting count
+        if (request.getStatus() != null) {
+            boolean wasActive = student.getStatus() == com.school.enums.StatusActive.active;
+            boolean nowActive = request.getStatus() == com.school.enums.StatusActive.active;
+            student.setStatus(request.getStatus());
+            if (wasActive && !nowActive) {
+                classRepository.decrementStudentCount(student.getClassName(), student.getSection());
+            } else if (!wasActive && nowActive) {
+                classRepository.incrementStudentCount(student.getClassName(), student.getSection());
+            }
+        }
+
+        StudentResponse response = mapToResponse(studentRepository.save(student));
+
+        // If moved to a different class, update both class counts
+        if (classChanged) {
+            classRepository.decrementStudentCount(oldClass, oldSection);
+            classRepository.incrementStudentCount(student.getClassName(), student.getSection());
+        }
+
+        return response;
     }
 
     @Transactional
     public void deleteStudent(UUID id) {
-        if (!studentRepository.existsById(id)) throw new ResourceNotFoundException("Student", "id", id);
+        Student student = findById(id);
+        String className = student.getClassName();
+        String section   = student.getSection();
+        boolean wasActive = student.getStatus() == com.school.enums.StatusActive.active;
+
         studentRepository.deleteById(id);
+
+        // Only decrement if student was active
+        if (wasActive) {
+            classRepository.decrementStudentCount(className, section);
+        }
     }
 
     public Student findById(UUID id) {

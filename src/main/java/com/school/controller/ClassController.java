@@ -65,4 +65,11 @@ public class ClassController {
         classService.deleteClass(id);
         return ResponseEntity.ok(ApiResponse.success("Class deleted", null));
     }
+
+    @PostMapping("/{id}/sync-count")
+    @Operation(summary = "Re-sync student_count from actual students table (fixes data drift)")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<ClassResponse>> syncStudentCount(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success("Count synced", classService.syncStudentCount(id)));
+    }
 }
