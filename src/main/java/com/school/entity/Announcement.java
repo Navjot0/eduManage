@@ -50,4 +50,5 @@ public class Announcement {
     @UpdateTimestamp                                         // Hibernate sets this on INSERT + UPDATE
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
 }

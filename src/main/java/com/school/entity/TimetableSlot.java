@@ -55,3 +55,4 @@ public class TimetableSlot {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }
+
