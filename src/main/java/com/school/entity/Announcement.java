@@ -4,6 +4,7 @@ import com.school.enums.AnnouncementTarget;
 import com.school.enums.PriorityLevel;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
@@ -42,10 +43,11 @@ public class Announcement {
     @Column(name = "is_active")
     private Boolean isActive = true;
 
-    @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt = LocalDateTime.now();
+    @CreationTimestamp                                        // Hibernate sets this on INSERT only
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;                         // no Java initializer needed
 
-    @Column(name = "updated_at")
-    @UpdateTimestamp
+    @UpdateTimestamp                                         // Hibernate sets this on INSERT + UPDATE
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 }

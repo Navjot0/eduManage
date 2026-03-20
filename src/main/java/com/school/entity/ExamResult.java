@@ -2,6 +2,7 @@ package com.school.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDate;
@@ -50,10 +51,11 @@ public class ExamResult {
     @JoinColumn(name = "entered_by")
     private Teacher enteredBy;
 
-    @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt = LocalDateTime.now();
+    @CreationTimestamp                                        // Hibernate sets this on INSERT only
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;                         // no Java initializer needed
 
-    @Column(name = "updated_at")
-    @UpdateTimestamp
+    @UpdateTimestamp                                         // Hibernate sets this on INSERT + UPDATE
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 }
