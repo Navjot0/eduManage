@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import com.school.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -22,6 +23,8 @@ import java.util.List;
 @Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    private final UserRepository userRepository;
+
     private final JwtTokenProvider tokenProvider;
 
     @Override
@@ -33,6 +36,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String email = tokenProvider.extractEmail(jwt);
                 String role = tokenProvider.extractRole(jwt);
                 String userId = tokenProvider.extractUserId(jwt);
+
+                // Block deactivated users mid-session
+                boolean isActive = userRepository.findByEmail(email)
+                        .map(u -> Boolean.TRUE.equals(u.getIsActive())).orElse(false);
+                if (!isActive) {
+                    log.warn("Blocked request from deactivated user: {}", email);
+                    filterChain.doFilter(request, response);
+                    return;
+                }
 
                 UserPrincipal principal = new UserPrincipal(userId, email, role);
                 UsernamePasswordAuthenticationToken authentication =

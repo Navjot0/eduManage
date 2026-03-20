@@ -28,16 +28,25 @@ public class TeacherService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public List<TeacherResponse> getAllTeachers() {
-        return teacherRepository.findAll().stream().map(this::mapToResponse).collect(Collectors.toList());
+    public List<TeacherResponse> getAllTeachers(StatusActive status) {
+        return teacherRepository.findAll().stream()
+                .filter(t -> status == null || t.getStatus() == status)
+                .map(this::mapToResponse).collect(Collectors.toList());
+    }
+
+    public TeacherResponse getTeacherByUserId(UUID userId) {
+        return mapToResponse(teacherRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Teacher", "userId", userId)));
     }
 
     public TeacherResponse getTeacherById(UUID id) {
         return mapToResponse(findById(id));
     }
 
-    public List<TeacherResponse> getTeachersByDepartment(String department) {
-        return teacherRepository.findByDepartment(department).stream().map(this::mapToResponse).collect(Collectors.toList());
+    public List<TeacherResponse> getTeachersByDepartment(String department, StatusActive status) {
+        return teacherRepository.findByDepartment(department).stream()
+                .filter(t -> status == null || t.getStatus() == status)
+                .map(this::mapToResponse).collect(Collectors.toList());
     }
 
     @Transactional
@@ -77,6 +86,26 @@ public class TeacherService {
         if (request.getDepartment() != null) teacher.setDepartment(request.getDepartment());
         if (request.getQualification() != null) teacher.setQualification(request.getQualification());
         if (request.getStatus() != null) teacher.setStatus(request.getStatus());
+        return mapToResponse(teacherRepository.save(teacher));
+    }
+
+    @Transactional
+    public TeacherResponse toggleTeacherStatus(UUID id) {
+        Teacher teacher = findById(id);
+        StatusActive newStatus = teacher.getStatus() == StatusActive.active
+                ? StatusActive.inactive : StatusActive.active;
+        return setTeacherStatus(id, newStatus);
+    }
+
+    @Transactional
+    public TeacherResponse setTeacherStatus(UUID id, StatusActive newStatus) {
+        Teacher teacher = findById(id);
+        teacher.setStatus(newStatus);
+
+        // Sync the linked user account active flag
+        teacher.getUser().setIsActive(newStatus == StatusActive.active);
+        userRepository.save(teacher.getUser());
+
         return mapToResponse(teacherRepository.save(teacher));
     }
 

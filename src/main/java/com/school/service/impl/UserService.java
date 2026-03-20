@@ -24,12 +24,16 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public List<UserResponse> getAllUsers() {
-        return userRepository.findAll().stream().map(this::mapToResponse).collect(Collectors.toList());
+    public List<UserResponse> getAllUsers(Boolean isActive) {
+        return userRepository.findAll().stream()
+                .filter(u -> isActive == null || u.getIsActive().equals(isActive))
+                .map(this::mapToResponse).collect(Collectors.toList());
     }
 
-    public List<UserResponse> getUsersByRole(UserRole role) {
-        return userRepository.findByRole(role).stream().map(this::mapToResponse).collect(Collectors.toList());
+    public List<UserResponse> getUsersByRole(UserRole role, Boolean isActive) {
+        return userRepository.findByRole(role).stream()
+                .filter(u -> isActive == null || u.getIsActive().equals(isActive))
+                .map(this::mapToResponse).collect(Collectors.toList());
     }
 
     public UserResponse getUserById(UUID id) {
@@ -63,10 +67,19 @@ public class UserService {
     }
 
     @Transactional
-    public void toggleUserStatus(UUID id) {
+    public UserResponse toggleUserStatus(UUID id) {
         User user = findUserById(id);
         user.setIsActive(!user.getIsActive());
-        userRepository.save(user);
+        User saved = userRepository.save(user);
+        return mapToResponse(saved);
+    }
+
+    @Transactional
+    public UserResponse setUserStatus(UUID id, boolean active) {
+        User user = findUserById(id);
+        user.setIsActive(active);
+        User saved = userRepository.save(user);
+        return mapToResponse(saved);
     }
 
     @Transactional

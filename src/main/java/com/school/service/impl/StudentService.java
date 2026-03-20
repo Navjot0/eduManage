@@ -31,13 +31,16 @@ public class StudentService {
     private final ClassRepository classRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public List<StudentResponse> getAllStudents() {
-        return studentRepository.findAll().stream().map(this::mapToResponse).collect(Collectors.toList());
+    public List<StudentResponse> getAllStudents(StatusActive status) {
+        return studentRepository.findAll().stream()
+                .filter(s -> status == null || s.getStatus() == status)
+                .map(this::mapToResponse).collect(Collectors.toList());
     }
 
-    public List<StudentResponse> getStudentsByClass(String className, String section) {
-        return studentRepository.findByClassNameAndSection(className, section)
-                .stream().map(this::mapToResponse).collect(Collectors.toList());
+    public List<StudentResponse> getStudentsByClass(String className, String section, StatusActive status) {
+        return studentRepository.findByClassNameAndSection(className, section).stream()
+                .filter(s -> status == null || s.getStatus() == status)
+                .map(this::mapToResponse).collect(Collectors.toList());
     }
 
     public StudentResponse getStudentByUserId(UUID userId) {
@@ -134,6 +137,40 @@ public class StudentService {
         }
 
         return response;
+    }
+
+    @Transactional
+    public StudentResponse toggleStudentStatus(UUID id) {
+        Student student = findById(id);
+        StatusActive newStatus = student.getStatus() == StatusActive.active
+                ? StatusActive.inactive : StatusActive.active;
+        return setStudentStatus(id, newStatus);
+    }
+
+    @Transactional
+    public StudentResponse setStudentStatus(UUID id, StatusActive newStatus) {
+        Student student = findById(id);
+        StatusActive oldStatus = student.getStatus();
+
+        student.setStatus(newStatus);
+
+        // Sync the linked user account active flag
+        User user = student.getUser();
+        user.setIsActive(newStatus == StatusActive.active);
+        userRepository.save(user);
+
+        studentRepository.save(student);
+
+        // Sync class student_count
+        if (oldStatus != newStatus) {
+            if (newStatus == StatusActive.active) {
+                classRepository.incrementStudentCount(student.getClassName(), student.getSection());
+            } else {
+                classRepository.decrementStudentCount(student.getClassName(), student.getSection());
+            }
+        }
+
+        return mapToResponse(student);
     }
 
     @Transactional

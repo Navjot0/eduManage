@@ -27,11 +27,14 @@ public class UserController {
     private final UserService userService;
 
     @GetMapping
-    @Operation(summary = "Get all users")
+    @Operation(summary = "Get all users. Filter by role and/or status (isActive=true/false)")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers(
-            @RequestParam(required = false) UserRole role) {
-        List<UserResponse> users = role != null ? userService.getUsersByRole(role) : userService.getAllUsers();
+            @RequestParam(required = false) UserRole role,
+            @RequestParam(required = false) Boolean isActive) {
+        List<UserResponse> users = role != null
+                ? userService.getUsersByRole(role, isActive)
+                : userService.getAllUsers(isActive);
         return ResponseEntity.ok(ApiResponse.success(users));
     }
 
@@ -61,9 +64,26 @@ public class UserController {
     @PatchMapping("/{id}/toggle-status")
     @Operation(summary = "Toggle user active/inactive status")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> toggleStatus(@PathVariable UUID id) {
-        userService.toggleUserStatus(id);
-        return ResponseEntity.ok(ApiResponse.success("User status toggled", null));
+    public ResponseEntity<ApiResponse<UserResponse>> toggleStatus(@PathVariable UUID id) {
+        UserResponse user = userService.toggleUserStatus(id);
+        String status = Boolean.TRUE.equals(user.getIsActive()) ? "activated" : "deactivated";
+        return ResponseEntity.ok(ApiResponse.success("User " + status + " successfully", user));
+    }
+
+    @PatchMapping("/{id}/activate")
+    @Operation(summary = "Activate a user account")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<UserResponse>> activateUser(@PathVariable UUID id) {
+        UserResponse user = userService.setUserStatus(id, true);
+        return ResponseEntity.ok(ApiResponse.success("User activated successfully", user));
+    }
+
+    @PatchMapping("/{id}/deactivate")
+    @Operation(summary = "Deactivate a user account")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<UserResponse>> deactivateUser(@PathVariable UUID id) {
+        UserResponse user = userService.setUserStatus(id, false);
+        return ResponseEntity.ok(ApiResponse.success("User deactivated successfully", user));
     }
 
     @DeleteMapping("/{id}")
