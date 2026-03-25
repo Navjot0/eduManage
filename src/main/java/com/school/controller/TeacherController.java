@@ -6,6 +6,8 @@ import com.school.dto.response.ApiResponse;
 import com.school.dto.response.TeacherResponse;
 import com.school.enums.StatusActive;
 import com.school.security.UserPrincipal;
+import com.school.dto.response.TeacherDashboardResponse;
+import com.school.service.impl.ClassService;
 import com.school.service.impl.TeacherService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,6 +29,7 @@ import java.util.UUID;
 public class TeacherController {
 
     private final TeacherService teacherService;
+    private final ClassService classService;
 
     @GetMapping
     @Operation(summary = "Get all teachers. Filter by department and/or status (active/inactive)")
@@ -47,6 +50,29 @@ public class TeacherController {
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
                 teacherService.getTeacherByUserId(UUID.fromString(principal.getUserId()))));
+    }
+
+    @GetMapping("/me/dashboard")
+    @Operation(summary = "Teacher dashboard — shows classes I am class teacher of + classes I teach via timetable")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
+    public ResponseEntity<ApiResponse<TeacherDashboardResponse>> getMyDashboard(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(required = false) String academicYear) {
+        // Resolve teacher from logged-in user
+        TeacherResponse teacher = teacherService.getTeacherByUserId(
+                java.util.UUID.fromString(principal.getUserId()));
+        TeacherDashboardResponse dashboard = classService.getTeacherDashboard(teacher.getId(), academicYear);
+        return ResponseEntity.ok(ApiResponse.success(dashboard));
+    }
+
+    @GetMapping("/{id}/dashboard")
+    @Operation(summary = "Admin: view any teacher's assigned classes dashboard")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<TeacherDashboardResponse>> getTeacherDashboard(
+            @PathVariable java.util.UUID id,
+            @RequestParam(required = false) String academicYear) {
+        TeacherDashboardResponse dashboard = classService.getTeacherDashboard(id, academicYear);
+        return ResponseEntity.ok(ApiResponse.success(dashboard));
     }
 
     @GetMapping("/by-user/{userId}")

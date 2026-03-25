@@ -13,5 +13,6 @@ public interface TimetableRepository extends JpaRepository<TimetableSlot, UUID> 
     List<TimetableSlot> findByClassNameAndSectionAndAcademicYear(String className, String section, String academicYear);
     List<TimetableSlot> findByClassNameAndSectionAndDayAndAcademicYear(String className, String section, WeekdayEnum day, String academicYear);
     List<TimetableSlot> findByTeacherId(UUID teacherId);
+    List<TimetableSlot> findByTeacherIdAndAcademicYear(UUID teacherId, String academicYear);
     List<TimetableSlot> findByTeacherIdAndDay(UUID teacherId, WeekdayEnum day);
 }

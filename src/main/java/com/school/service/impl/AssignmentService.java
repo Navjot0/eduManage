@@ -13,6 +13,7 @@ import com.school.enums.AssignmentStatus;
 import com.school.exception.BadRequestException;
 import com.school.exception.ResourceNotFoundException;
 import com.school.repository.AssignmentRepository;
+import com.school.repository.ClassRepository;
 import com.school.repository.AssignmentSubmissionRepository;
 import com.school.repository.StudentRepository;
 import com.school.repository.TeacherRepository;
@@ -30,6 +31,7 @@ import java.util.stream.Collectors;
 public class AssignmentService {
 
     private final AssignmentRepository assignmentRepository;
+    private final ClassRepository classRepository;
     private final AssignmentSubmissionRepository submissionRepository;
     private final TeacherRepository teacherRepository;
     private final StudentRepository studentRepository;
@@ -51,8 +53,13 @@ public class AssignmentService {
     @Transactional
     public AssignmentResponse createAssignment(UUID userId, CreateAssignmentRequest request) {
         Teacher teacher = teacherRepository.findByUserId(userId)
-                .orElseGet(() -> teacherRepository.findById(userId)
-                        .orElseThrow(() -> new ResourceNotFoundException("Teacher", "userId", userId)));
+                .orElseThrow(() -> new ResourceNotFoundException("Teacher profile not found for userId", "userId", userId));
+        // Validate class exists
+        if (classRepository.findByClassNameAndSection(request.getClassName(), request.getSection()).isEmpty()) {
+            throw new com.school.exception.BadRequestException(
+                    "Class '" + request.getClassName() + "-" + request.getSection() + "' does not exist.");
+        }
+
         Assignment assignment = Assignment.builder()
                 .title(request.getTitle()).subject(request.getSubject())
                 .description(request.getDescription()).className(request.getClassName())

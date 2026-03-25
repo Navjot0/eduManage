@@ -64,6 +64,15 @@ public class StudentService {
         if (studentRepository.existsByRollNumber(request.getRollNumber()))
             throw new ConflictException("Roll number already exists: " + request.getRollNumber());
 
+        // Validate that the target class exists in the classes table
+        boolean classExists = !classRepository
+                .findByClassNameAndSection(request.getClassName(), request.getSection()).isEmpty();
+        if (!classExists) {
+            throw new com.school.exception.BadRequestException(
+                    "Class '" + request.getClassName() + "-" + request.getSection() +
+                            "' does not exist. Please create the class first via POST /classes.");
+        }
+
         User user = User.builder()
                 .name(request.getName())
                 .email(request.getEmail())
@@ -130,10 +139,16 @@ public class StudentService {
 
         StudentResponse response = mapToResponse(studentRepository.save(student));
 
-        // If moved to a different class, update both class counts
+        // If moved to a different class, validate new class exists and update counts
         if (classChanged) {
+            String newClass = student.getClassName();
+            String newSection = student.getSection();
+            if (classRepository.findByClassNameAndSection(newClass, newSection).isEmpty()) {
+                throw new com.school.exception.BadRequestException(
+                        "Target class '" + newClass + "-" + newSection + "' does not exist.");
+            }
             classRepository.decrementStudentCount(oldClass, oldSection);
-            classRepository.incrementStudentCount(student.getClassName(), student.getSection());
+            classRepository.incrementStudentCount(newClass, newSection);
         }
 
         return response;
@@ -194,6 +209,19 @@ public class StudentService {
     }
 
     public StudentResponse mapToResponse(Student s) {
+        // Look up the linked class record to get classId, teacher, and student_count
+        java.util.Optional<com.school.entity.Class> classOpt =
+                classRepository.findByClassNameAndSection(s.getClassName(), s.getSection())
+                        .stream().findFirst();
+
+        UUID classId             = classOpt.map(com.school.entity.Class::getId).orElse(null);
+        String classTeacherName  = classOpt
+                .filter(cls -> cls.getClassTeacher() != null)
+                .map(cls -> cls.getClassTeacher().getUser().getName())
+                .orElse(null);
+        Integer totalStudents    = classOpt.map(com.school.entity.Class::getStudentCount).orElse(null);
+        String academicYear      = classOpt.map(com.school.entity.Class::getAcademicYear).orElse(null);
+
         return StudentResponse.builder()
                 .id(s.getId())
                 .userId(s.getUser().getId())
@@ -202,12 +230,16 @@ public class StudentService {
                 .rollNumber(s.getRollNumber())
                 .className(s.getClassName())
                 .section(s.getSection())
+                .academicYear(academicYear)
                 .parentName(s.getParentName())
                 .parentPhone(s.getParentPhone())
                 .address(s.getAddress())
                 .dateOfBirth(s.getDateOfBirth())
                 .admissionDate(s.getAdmissionDate())
                 .status(s.getStatus())
+                .classId(classId)
+                .classTeacherName(classTeacherName)
+                .totalStudentsInClass(totalStudents)
                 .createdAt(s.getCreatedAt())
                 .build();
     }

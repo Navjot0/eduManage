@@ -5,6 +5,7 @@ import com.school.dto.response.StudyMaterialResponse;
 import com.school.entity.StudyMaterial;
 import com.school.entity.Teacher;
 import com.school.exception.ResourceNotFoundException;
+import com.school.repository.ClassRepository;
 import com.school.repository.StudyMaterialRepository;
 import com.school.repository.TeacherRepository;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class StudyMaterialService {
 
+    private final ClassRepository classRepository;
     private final StudyMaterialRepository materialRepository;
     private final TeacherRepository teacherRepository;
 
@@ -44,8 +46,13 @@ public class StudyMaterialService {
     @Transactional
     public StudyMaterialResponse createMaterial(UUID userId, CreateStudyMaterialRequest request) {
         Teacher teacher = teacherRepository.findByUserId(userId)
-                .orElseGet(() -> teacherRepository.findById(userId)
-                        .orElseThrow(() -> new ResourceNotFoundException("Teacher", "userId", userId)));
+                .orElseThrow(() -> new ResourceNotFoundException("Teacher profile not found for userId", "userId", userId));
+        // Validate class exists
+        if (classRepository.findByClassNameAndSection(request.getClassName(), request.getSection()).isEmpty()) {
+            throw new com.school.exception.BadRequestException(
+                    "Class '" + request.getClassName() + "-" + request.getSection() + "' does not exist.");
+        }
+
         StudyMaterial material = StudyMaterial.builder()
                 .title(request.getTitle()).subject(request.getSubject())
                 .description(request.getDescription()).fileType(request.getFileType())

@@ -16,4 +16,9 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
     List<Student> findByClassNameAndSection(String className, String section);
     List<Student> findByStatus(StatusActive status);
     boolean existsByRollNumber(String rollNumber);
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT COUNT(s) FROM Student s WHERE s.className = :className AND s.section = :section AND s.status = 'active'")
+    long countActiveByClassAndSection(
+            @org.springframework.data.repository.query.Param("className") String className,
+            @org.springframework.data.repository.query.Param("section") String section);
 }

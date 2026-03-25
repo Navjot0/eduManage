@@ -15,11 +15,18 @@ public class StudentResponse {
     private String rollNumber;
     private String className;
     private String section;
+    private String academicYear;
     private String parentName;
     private String parentPhone;
     private String address;
     private LocalDate dateOfBirth;
     private LocalDate admissionDate;
     private StatusActive status;
+
+    // Linked class info (from classes table)
+    private UUID classId;
+    private String classTeacherName;
+    private Integer totalStudentsInClass;
+
     private LocalDateTime createdAt;
 }

@@ -7,6 +7,7 @@ import com.school.entity.TimetableSlot;
 import com.school.enums.WeekdayEnum;
 import com.school.exception.ConflictException;
 import com.school.exception.ResourceNotFoundException;
+import com.school.repository.ClassRepository;
 import com.school.repository.TeacherRepository;
 import com.school.repository.TimetableRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TimetableService {
 
+    private final ClassRepository classRepository;
     private final TimetableRepository timetableRepository;
     private final TeacherRepository teacherRepository;
 
@@ -49,12 +51,18 @@ public class TimetableService {
         Teacher teacher = teacherRepository.findById(request.getTeacherId())
                 .orElseThrow(() -> new ResourceNotFoundException("Teacher", "id", request.getTeacherId()));
 
+        // Validate class exists
+        if (classRepository.findByClassNameAndSection(request.getClassName(), request.getSection()).isEmpty()) {
+            throw new com.school.exception.BadRequestException(
+                    "Class '" + request.getClassName() + "-" + request.getSection() + "' does not exist.");
+        }
+
         // Check for class conflict
         boolean classConflict = timetableRepository
                 .findByClassNameAndSectionAndDayAndAcademicYear(request.getClassName(), request.getSection(), request.getDay(), request.getAcademicYear())
                 .stream().anyMatch(s -> s.getIsActive() &&
                         !(request.getEndTime().compareTo(s.getStartTime()) <= 0 ||
-                          request.getStartTime().compareTo(s.getEndTime()) >= 0));
+                                request.getStartTime().compareTo(s.getEndTime()) >= 0));
         if (classConflict) throw new ConflictException("Time slot conflicts with existing class schedule");
 
         TimetableSlot slot = TimetableSlot.builder()
