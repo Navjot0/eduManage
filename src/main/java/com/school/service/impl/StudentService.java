@@ -96,16 +96,8 @@ public class StudentService {
                 .admissionDate(request.getAdmissionDate())
                 .status(StatusActive.active)
                 .build();
-        StudentResponse response = mapToResponse(studentRepository.save(student));
-
-        // Increment student_count in the matching class row
-        int updated = classRepository.incrementStudentCount(request.getClassName(), request.getSection());
-        if (updated == 0) {
-            // Class row doesn't exist yet — that's OK, count stays at default
-            // Admins should create the class first via POST /classes
-        }
-
-        return response;
+        // student_count updated automatically by DB trigger trg_sync_student_count
+        return mapToResponse(studentRepository.save(student));
     }
 
     @Transactional
@@ -125,30 +117,21 @@ public class StudentService {
         if (request.getAddress()     != null) student.setAddress(request.getAddress());
         if (request.getDateOfBirth() != null) student.setDateOfBirth(request.getDateOfBirth());
 
-        // Handle activation / deactivation affecting count
+        // Handle status change — student_count updated by DB trigger
         if (request.getStatus() != null) {
-            boolean wasActive = student.getStatus() == com.school.enums.StatusActive.active;
-            boolean nowActive = request.getStatus() == com.school.enums.StatusActive.active;
             student.setStatus(request.getStatus());
-            if (wasActive && !nowActive) {
-                classRepository.decrementStudentCount(student.getClassName(), student.getSection());
-            } else if (!wasActive && nowActive) {
-                classRepository.incrementStudentCount(student.getClassName(), student.getSection());
-            }
         }
 
         StudentResponse response = mapToResponse(studentRepository.save(student));
 
-        // If moved to a different class, validate new class exists and update counts
+        // Validate new class exists if class changed — count updated by DB trigger
         if (classChanged) {
-            String newClass = student.getClassName();
+            String newClass   = student.getClassName();
             String newSection = student.getSection();
             if (classRepository.findByClassNameAndSection(newClass, newSection).isEmpty()) {
                 throw new com.school.exception.BadRequestException(
                         "Target class '" + newClass + "-" + newSection + "' does not exist.");
             }
-            classRepository.decrementStudentCount(oldClass, oldSection);
-            classRepository.incrementStudentCount(newClass, newSection);
         }
 
         return response;
@@ -174,33 +157,16 @@ public class StudentService {
         user.setIsActive(newStatus == StatusActive.active);
         userRepository.save(user);
 
+        // student_count updated automatically by DB trigger trg_sync_student_count
         studentRepository.save(student);
-
-        // Sync class student_count
-        if (oldStatus != newStatus) {
-            if (newStatus == StatusActive.active) {
-                classRepository.incrementStudentCount(student.getClassName(), student.getSection());
-            } else {
-                classRepository.decrementStudentCount(student.getClassName(), student.getSection());
-            }
-        }
-
         return mapToResponse(student);
     }
 
     @Transactional
     public void deleteStudent(UUID id) {
-        Student student = findById(id);
-        String className = student.getClassName();
-        String section   = student.getSection();
-        boolean wasActive = student.getStatus() == com.school.enums.StatusActive.active;
-
+        findById(id); // validate exists
+        // student_count updated automatically by DB trigger trg_sync_student_count
         studentRepository.deleteById(id);
-
-        // Only decrement if student was active
-        if (wasActive) {
-            classRepository.decrementStudentCount(className, section);
-        }
     }
 
     public Student findById(UUID id) {
