@@ -57,21 +57,29 @@ public class StudentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Student", "rollNumber", rollNumber)));
     }
 
+    /** Preferred: look up by roll number scoped to a specific class */
+    public StudentResponse getStudentByRollNumberAndClass(
+            String rollNumber, String className, String section) {
+        return mapToResponse(
+                studentRepository.findByRollNumberAndClassNameAndSection(rollNumber, className, section)
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Student", "rollNumber in " + className + "-" + section, rollNumber)));
+    }
+
     @Transactional
     public StudentResponse createStudent(CreateStudentRequest request) {
         if (userRepository.existsByEmail(request.getEmail()))
             throw new ConflictException("Email already registered: " + request.getEmail());
-        if (studentRepository.existsByRollNumber(request.getRollNumber()))
-            throw new ConflictException("Roll number already exists: " + request.getRollNumber());
 
-        // Validate that the target class exists in the classes table
-        boolean classExists = !classRepository
-                .findByClassNameAndSection(request.getClassName(), request.getSection()).isEmpty();
-        if (!classExists) {
+        // Validate class exists
+        if (classRepository.findByClassNameAndSection(request.getClassName(), request.getSection()).isEmpty())
             throw new com.school.exception.BadRequestException(
                     "Class '" + request.getClassName() + "-" + request.getSection() +
-                            "' does not exist. Please create the class first via POST /classes.");
-        }
+                            "' does not exist. Create the class first via POST /classes.");
+
+        // Resolve roll number — auto-assign if not provided
+        String rollNumber = resolveRollNumber(
+                request.getRollNumber(), request.getClassName(), request.getSection(), null);
 
         User user = User.builder()
                 .name(request.getName())
@@ -86,7 +94,7 @@ public class StudentService {
         Student student = Student.builder()
                 .id(UUID.randomUUID())
                 .user(user)
-                .rollNumber(request.getRollNumber())
+                .rollNumber(rollNumber)
                 .className(request.getClassName())
                 .section(request.getSection())
                 .parentName(request.getParentName())
@@ -104,11 +112,22 @@ public class StudentService {
     public StudentResponse updateStudent(UUID id, UpdateStudentRequest request) {
         Student student = findById(id);
 
-        // Detect class/section change to update counts
-        String oldClass   = student.getClassName();
-        String oldSection = student.getSection();
-        boolean classChanged = (request.getClassName() != null && !request.getClassName().equals(oldClass))
-                || (request.getSection()   != null && !request.getSection().equals(oldSection));
+        String targetClass   = request.getClassName() != null ? request.getClassName() : student.getClassName();
+        String targetSection = request.getSection()   != null ? request.getSection()   : student.getSection();
+        boolean classChanged = !targetClass.equals(student.getClassName()) ||
+                !targetSection.equals(student.getSection());
+
+        // Validate target class exists if changing class
+        if (classChanged && classRepository.findByClassNameAndSection(targetClass, targetSection).isEmpty())
+            throw new com.school.exception.BadRequestException(
+                    "Target class '" + targetClass + "-" + targetSection + "' does not exist.");
+
+        // Resolve roll number for target class
+        if (request.getRollNumber() != null || classChanged) {
+            String newRoll = resolveRollNumber(
+                    request.getRollNumber(), targetClass, targetSection, student.getId());
+            student.setRollNumber(newRoll);
+        }
 
         if (request.getClassName() != null) student.setClassName(request.getClassName());
         if (request.getSection()   != null) student.setSection(request.getSection());
@@ -117,24 +136,10 @@ public class StudentService {
         if (request.getAddress()     != null) student.setAddress(request.getAddress());
         if (request.getDateOfBirth() != null) student.setDateOfBirth(request.getDateOfBirth());
 
-        // Handle status change — student_count updated by DB trigger
-        if (request.getStatus() != null) {
-            student.setStatus(request.getStatus());
-        }
+        // status change — student_count updated by DB trigger
+        if (request.getStatus() != null) student.setStatus(request.getStatus());
 
-        StudentResponse response = mapToResponse(studentRepository.save(student));
-
-        // Validate new class exists if class changed — count updated by DB trigger
-        if (classChanged) {
-            String newClass   = student.getClassName();
-            String newSection = student.getSection();
-            if (classRepository.findByClassNameAndSection(newClass, newSection).isEmpty()) {
-                throw new com.school.exception.BadRequestException(
-                        "Target class '" + newClass + "-" + newSection + "' does not exist.");
-            }
-        }
-
-        return response;
+        return mapToResponse(studentRepository.save(student));
     }
 
     @Transactional
@@ -172,6 +177,52 @@ public class StudentService {
     public Student findById(UUID id) {
         return studentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Student", "id", id));
+    }
+
+    /**
+     * Resolves the roll number to use when creating or updating a student.
+     *
+     * Rules:
+     *  - If rollNumber is provided: validate it is not already taken in className+section
+     *    (excluding the current student on updates).
+     *  - If rollNumber is null/blank: auto-assign the next available sequential number
+     *    in the class (001, 002, 003...).
+     */
+    private String resolveRollNumber(String requested, String className,
+                                     String section, UUID excludeStudentId) {
+        if (requested != null && !requested.isBlank()) {
+            // Validate uniqueness within class
+            boolean taken = excludeStudentId != null
+                    ? studentRepository.existsByRollNumberAndClassAndSectionExcluding(
+                    requested, className, section, excludeStudentId)
+                    : studentRepository.existsByRollNumberAndClassNameAndSection(
+                    requested, className, section);
+            if (taken)
+                throw new ConflictException(
+                        "Roll number '" + requested + "' is already taken in class " +
+                                className + "-" + section);
+            return requested;
+        }
+
+        // Auto-assign: find max roll number in the class and increment
+        java.util.List<String> existing = studentRepository
+                .findRollNumbersByClassOrderedDesc(className, section);
+
+        if (existing.isEmpty()) {
+            return "001";
+        }
+
+        // Parse the highest numeric roll number and add 1
+        for (String roll : existing) {
+            try {
+                int next = Integer.parseInt(roll.trim()) + 1;
+                return String.format("%03d", next);
+            } catch (NumberFormatException ignored) {
+                // skip non-numeric roll numbers
+            }
+        }
+        // Fallback: total count + 1
+        return String.format("%03d", existing.size() + 1);
     }
 
     public StudentResponse mapToResponse(Student s) {

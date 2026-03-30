@@ -58,10 +58,23 @@ public class StudentController {
     }
 
     @GetMapping("/roll/{rollNumber}")
-    @Operation(summary = "Get student by roll number")
+    @Operation(summary = "Get student by roll number (global — use /roll/{rollNumber}/class instead)")
     @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
-    public ResponseEntity<ApiResponse<StudentResponse>> getByRollNumber(@PathVariable String rollNumber) {
-        return ResponseEntity.ok(ApiResponse.success(studentService.getStudentByRollNumber(rollNumber)));
+    public ResponseEntity<ApiResponse<StudentResponse>> getByRollNumber(
+            @PathVariable String rollNumber) {
+        return ResponseEntity.ok(ApiResponse.success(
+                studentService.getStudentByRollNumber(rollNumber)));
+    }
+
+    @GetMapping("/roll/{rollNumber}/class")
+    @Operation(summary = "Get student by roll number scoped to a class (preferred)")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
+    public ResponseEntity<ApiResponse<StudentResponse>> getByRollNumberAndClass(
+            @PathVariable String rollNumber,
+            @RequestParam String className,
+            @RequestParam String section) {
+        return ResponseEntity.ok(ApiResponse.success(
+                studentService.getStudentByRollNumberAndClass(rollNumber, className, section)));
     }
 
     @PostMapping

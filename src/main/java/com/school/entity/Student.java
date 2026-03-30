@@ -11,7 +11,10 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "students")
+@Table(name = "students", uniqueConstraints = {
+        @UniqueConstraint(name = "uq_roll_number_per_class",
+                columnNames = {"roll_number", "class_name", "section"})
+})
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Student {
 
@@ -23,7 +26,7 @@ public class Student {
     @JoinColumn(name = "user_id", unique = true)
     private User user;
 
-    @Column(name = "roll_number", unique = true, nullable = false, length = 20)
+    @Column(name = "roll_number", nullable = false, length = 20)
     private String rollNumber;
 
     @Column(name = "class_name", nullable = false, length = 20)
@@ -50,12 +53,11 @@ public class Student {
     @Enumerated(EnumType.STRING)
     private StatusActive status = StatusActive.active;
 
-    @CreationTimestamp                                        // Hibernate sets this on INSERT only
+    @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;                         // no Java initializer needed
+    private LocalDateTime createdAt;
 
-    @UpdateTimestamp                                         // Hibernate sets this on INSERT + UPDATE
+    @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 }
-
