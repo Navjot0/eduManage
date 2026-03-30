@@ -43,6 +43,11 @@ public class SecurityConfig {
                         .requestMatchers("/classes/**").hasAnyRole("ADMIN", "TEACHER")
                         .requestMatchers("/fee-types/**").hasRole("ADMIN")
                         .requestMatchers("/fees/**").hasAnyRole("ADMIN", "STUDENT")
+                        .requestMatchers(HttpMethod.GET, "/attendance/**")
+                        .hasAnyRole("ADMIN", "TEACHER")   // ✅ Admin allowed ONLY for GET
+
+                        .requestMatchers("/attendance/**")
+                        .hasRole("TEACHER")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
