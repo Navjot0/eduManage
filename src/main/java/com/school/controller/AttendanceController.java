@@ -4,6 +4,8 @@ import com.school.dto.request.AttendanceRequest;
 import com.school.dto.request.BulkAttendanceRequest;
 import com.school.dto.response.ApiResponse;
 import com.school.dto.response.AttendanceResponse;
+import com.school.dto.response.ClassAttendanceResponse;
+import com.school.dto.response.ClassAttendanceSummaryResponse;
 import com.school.dto.response.AttendanceSummaryResponse;
 import com.school.enums.AttendanceStatus;
 import com.school.security.UserPrincipal;
@@ -59,6 +61,61 @@ public class AttendanceController {
             @RequestParam String section,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return ResponseEntity.ok(ApiResponse.success(attendanceService.getClassAttendanceByDate(className, section, date)));
+    }
+
+    // ── Admin-only: class-level attendance ───────────────────────────────────
+
+    @GetMapping("/classes/{className}/{section}")
+    @Operation(
+            summary = "Admin: get full attendance for a class on a specific date",
+            description = "Returns all students in the class with their attendance status. " +
+                    "Students not marked show status=null. Filter by subject optionally.")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<ClassAttendanceResponse>> getClassAttendanceForDate(
+            @PathVariable String className,
+            @PathVariable String section,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) String subject) {
+        ClassAttendanceResponse response = attendanceService
+                .getClassAttendanceForDate(className, section, subject, date);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/classes/{className}/{section}/summary")
+    @Operation(
+            summary = "Admin: attendance summary for a class over a date range",
+            description = "Returns per-student stats (present/absent/late/%) and daily breakdown. " +
+                    "Useful for report cards and parent meetings.")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<ClassAttendanceSummaryResponse>> getClassAttendanceSummary(
+            @PathVariable String className,
+            @PathVariable String section,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate to) {
+        ClassAttendanceSummaryResponse response = attendanceService
+                .getClassAttendanceSummary(className, section, from, to);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/classes/{className}/{section}/range")
+    @Operation(
+            summary = "Admin: raw attendance records for a class over a date range",
+            description = "Returns all individual attendance records sorted by date then roll number. " +
+                    "Filter by subject optionally.")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<java.util.List<AttendanceResponse>>> getClassAttendanceRange(
+            @PathVariable String className,
+            @PathVariable String section,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) String subject) {
+        return ResponseEntity.ok(ApiResponse.success(
+                attendanceService.getClassAttendanceRange(className, section, from, to, subject)));
     }
 
     @PostMapping
